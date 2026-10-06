@@ -1,117 +1,138 @@
+<div align="center">
+
 # Medicare Claims Payment Integrity Analytics
 
 **Reviewing every claim by hand was costing $425K and still letting bad claims through. Ten rule-based prepayment edits cut that cost by 72% and sent 96% of claims through without manual review.**
 
-![Python](https://img.shields.io/badge/Python-pandas-3776AB?logo=python&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQL-4169E1?logo=postgresql&logoColor=white)
-![Power BI](https://img.shields.io/badge/Power%20BI-DAX%20%7C%20Power%20Query-F2C811?logo=powerbi&logoColor=black)
-![Jupyter](https://img.shields.io/badge/Jupyter-Notebooks-F37626?logo=jupyter&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-150458?style=flat-square&logo=pandas&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Power BI](https://img.shields.io/badge/Power%20BI-DAX-F2C811?style=flat-square&logo=powerbi&logoColor=black)
+![Jupyter](https://img.shields.io/badge/Jupyter-F37626?style=flat-square&logo=jupyter&logoColor=white)
 
-![Executive summary page of the Power BI report](assets/report%20summary.png)
+[Notebooks](#how-it-was-built) · [Power BI report](medicare_payment_integrity.pbix) · [Findings](#detailed-findings) · [Recommendations](#recommendations)
 
-> **Data note:** All claims, patients and providers are synthetic. File layouts follow real CMS formats (DE-SynPUF, NPPES, X12 835), and volumes, charges and denial rates are calibrated to CMS 2023 Physician/Supplier Procedure Summary data. No real patient or provider information is used.
+</div>
 
----
-
-## The Problem
-
-A Medicare Part B payment integrity team decided **23,631 professional claims** between January 2025 and June 2026. Every claim went through manual review, whatever its risk:
-
-* **Reviewers spent most of their time on clean claims.** 93% of claims were paid in the end, yet each one still waited in the same review queue.
-* **Every manual review cost $18 in staff time.** Reviewing every claim cost **$425,358** over 18 months.
-* **A wrong approval cost far more than a review:** the amount paid, plus about $250 in rework and recovery.
-* **Bad claims still got paid.** With an overloaded queue, **99 claims that broke a billing rule were paid anyway**: units over the daily limit, screening diagnoses on diagnostic services, duplicates.
-* **Denials were rising and no one knew why.** The denial rate held at 5.8% to 6.8% through 2025, then jumped to **8.2% in both 2026 quarters**.
-* **Provider outreach was unfocused.** The team had no way to rank which practices were causing most of the billing errors.
-
-### What leadership needed to decide
-
-| # | Business question | Decision it supports |
-|---|---|---|
-| 1 | Are denials rising, and what is driving them? | Where to focus edits and provider education |
-| 2 | Can simple rules catch bad claims **before** payment? | Whether rules can be trusted to screen claims |
-| 3 | Which rules are safe to auto-deny, and which need a reviewer? | Hard edit vs. soft edit |
-| 4 | Which paid claims should we try to recover? | Post-payment recovery worklist |
-| 5 | Which providers should we contact first? | Targeted Probe and Educate (TPE) selection |
-| 6 | Do the rules save money compared with reviewing everything? | Review operating model |
+![Power BI report summary page](assets/report%20summary.png)
 
 ---
 
-## Results at a Glance
+## Project Overview
 
-| | Before: review every claim | After: rule-based routing |
-|---|---:|---:|
-| Claims sent to manual review | 23,631 | **854** |
-| Claims processed without manual review | 0 | **22,777 (96%)** |
-| Claims auto-denied by high-accuracy edits | 0 | **631** |
-| Total decision cost* | $425,358 | **$120,274** |
-| Agreement with the payer's final decision | n/a | **98.3%** |
-
-**Net savings: $305,084 (72%).** Rules stay cheaper than full review until a missed improper claim costs more than **$1,281** in rework and recovery.
-
-<sub>*Scenario assumptions: $18 per manual review, $0.35 per automated claim, and the amount paid plus $250 for each improper claim the edits miss. The what-if inputs in the Power BI report let you change all three.</sub>
-
----
+| | |
+|---|---|
+| **Domain** | Healthcare payment integrity: Medicare Part B professional claims |
+| **Business problem** | Every claim goes to a reviewer. Clean claims clog the queue while claims that break billing rules still get paid |
+| **Who it is for** | Payment integrity, claims operations, provider relations, and finance leadership |
+| **Data** | 23,980 synthetic Part B claims (23,631 decided), 2,200 beneficiaries, 120 providers and the payer's X12 835 remittance, January 2025 to June 2026 |
+| **Tools** | Python (pandas, SQLAlchemy), PostgreSQL, SQL, Jupyter, Power BI (DAX, Power Query) |
+| **Output** | A tested set of 10 prepayment edits, an auto-deny vs. manual review routing plan, a recovery worklist, a provider outreach list, and a 4-page Power BI report |
 
 ## Key Findings
+
+| **$425K → $120K** | **96%** | **82%** | **63%** |
+|:---:|:---:|:---:|:---:|
+| decision cost, review everything vs. rule-based routing (72% lower) | of claims decided without manual review (22,777 of 23,631) | of improper claims caught before payment, with 93.3% edit accuracy | of flagged claims come from the top 25% of providers |
+
+---
+
+## Business Problem
+
+A Medicare claims operation can fail in two directions.
+
+**Pay a claim that breaks a billing rule**, and the money is already gone. Getting it back means a records request, a recovery letter and an appeal window, which costs far more than catching it up front.
+
+**Send every claim to a reviewer** to avoid that, and the review queue becomes the bottleneck. This is where this operation stood. Across 18 months, every one of its 23,631 decided Part B claims went through manual review, regardless of risk:
+
+* **Reviewers spent most of their time on clean claims.** 93 of every 100 claims were paid in the end, yet every one waited in the same queue as the risky ones.
+* **Each review cost $18 in staff time**, so reviewing everything cost **$425,358**.
+* **A wrong approval cost far more than a review:** the amount paid plus about **$250** in rework and recovery.
+* **Bad claims still slipped through.** With reviewers stretched across every claim, **99 claims that broke a billing rule were paid** (units over the daily limit, duplicate billing, screening diagnoses on diagnostic services).
+* **Denials were climbing and no one knew why.** The denial rate held at 5.8% to 6.8% through 2025, then jumped to **8.2% in both 2026 quarters**.
+* **Provider education was a guess.** There was no way to rank which practices caused most of the billing errors, so outreach could not be targeted.
+
+The goal is not to automate as many claims as possible. It is to find which claims can be decided safely without a reviewer, which ones still need one, and **the point at which automation stops saving money**. Sending a claim to review is not a denial: an unusual claim can still be valid and paid.
+
+## Business Questions
+
+1. Are denials rising, and what is driving them?
+2. Can simple rules, using only what is on the claim at arrival, catch bad claims before payment?
+3. Which rules are accurate enough to deny automatically, and which need a reviewer?
+4. Which already-paid claims should be reviewed for recovery?
+5. Which providers should be contacted first?
+6. Does rule-based routing save money compared with reviewing every claim, and under what assumptions does that change?
+
+## Stakeholders
+
+| Stakeholder | Decisions Supported |
+|---|---|
+| Payment integrity team | Which edits to deploy as hard (auto-deny) vs. soft (route to review), and which paid claims to pursue |
+| Claims operations | How much review capacity is needed once low-risk claims pass automatically |
+| Provider relations | Which providers and specialties to prioritize for Targeted Probe and Educate (TPE) outreach |
+| Finance and leadership | Whether the review model saves money, and how sensitive that is to cost assumptions |
+
+---
+
+## Detailed Findings
 
 ### 1. Denials are rising, led by physical therapy
 
 ![Denial Overview page](assets/Denial%20Overview.png)
 
-* Denial rate rose from **5.8% to 6.8%** per quarter in 2025 to **8.2%** in 2026 Q1 and Q2 (6.9% overall, $138,140 denied).
-* **97110 Therapeutic exercise** has the highest denial rate at **11.6%**, more than twice the rate of office visits.
-* Missing information and medical necessity account for **half of all denials**. Both point to incomplete claims or documentation.
-* 7 of 8 denial reasons increased in 2026. Provider enrollment denials nearly tripled.
+| Period | Denial rate |
+|---|---:|
+| 2025, Q1 to Q4 | 5.8% to 6.8% |
+| 2026, Q1 and Q2 | **8.2%** |
+| Overall | 6.9% ($138,140 denied) |
 
-**Recommendation:** Prioritize therapy claims for review and add a provider enrollment date check at claim intake.
+* **97110 Therapeutic exercise** is denied at **11.6%**, more than twice the rate of office visits (4.8% to 4.9%).
+* **Missing information and medical necessity** make up half of all denials. Both point to incomplete claims or documentation.
+* The 2026 rise is broad: **7 of 8 denial reasons increased**, and provider enrollment denials nearly tripled.
 
-### 2. Ten prepayment edits catch 82% of improper claims
+### 2. Ten prepayment edits catch 82% of improper claims before payment
 
 ![Prepayment Edits page](assets/Payment%20Integrity%20Model.png)
 
-Each edit is built in SQL from a published Medicare billing rule and mapped to the payer denial reason (CARC) it mirrors.
+| | Payer refused | Payer paid |
+|---|---:|---:|
+| **Flagged by edits** | 1,386 | 99 |
+| **Not flagged** | 296 | 21,850 |
 
-| Edit | Rule | Mirrors CARC |
-|---|---|---|
-| No Part B coverage | Service date outside the patient's Part B coverage | 24, 26, 27 |
-| Service after death | Service date after the patient's date of death | 27 |
-| Provider not enrolled | Service date outside the provider's Medicare enrollment | B7 |
-| Late filing | Claim received more than 1 year after service | 29 |
-| Units over daily limit | Units above the fee schedule's daily maximum (MUE style) | 151 |
-| Missing referring provider | Lab or therapy claim with no referring NPI | 16 |
-| Missing diagnosis | No ICD-10-CM code | 16 |
-| Wrong modifier | Therapy without GP, or GP/59 on a non-therapy code | 4 |
-| Screening dx on diagnostic | Screening diagnosis (Z00, Z13) or a diagnosis that does not support therapy | 50 |
-| Duplicate claim | Same patient, provider, code, date, units and modifier already billed | 18 |
+* Edits flag 1,485 claims with **93.3% accuracy** and catch **82% of the 1,682 refused claims**. Overall agreement with the payer is **98.3%**.
+* **6 edits are 98% or more accurate** and can deny automatically (631 claims). **4 edits** at 84.9% to 92.9% send claims to a reviewer (854 claims). The other **22,146 claims pass automatically**.
+* The **296 missed claims** are almost all medical necessity (151) or missing information (144). Those need medical records, which claim data cannot show, so more edits will not close this gap. This matches CMS findings that about two thirds of FY2025 Medicare improper payments were documentation problems.
+* **Cost:** rules cost **$120,274** vs. **$425,358** for full review, saving **$305,084**. They stay cheaper until a missed improper claim costs more than **$1,281** in rework and recovery.
 
-* The edits flagged **1,485 claims**. The payer also refused **1,386** of them (**93.3% accuracy**), and they caught **82% of the 1,682 refused claims**.
-* **6 edits are 98%+ accurate** and can auto-deny (631 claims). **4 edits** at 84.9% to 92.9% route to a reviewer (854 claims).
-* The **296 missed claims** are almost all medical necessity (151) or missing information (144). These need medical records, which claim data cannot show. More edits will not close this gap.
-
-**Recommendation:** Deploy 6 hard edits and 4 soft edits. Tighten the screening diagnosis code list, the weakest rule with 49 false flags.
-
-### 3. A few providers drive most of the errors
+### 3. A small group of providers drives most of the errors
 
 ![Provider Focus page](assets/Provider%20Focused%20View.png)
 
-* The **top 25% of providers (30)** account for **63% of flagged claims** (936 claims).
-* **Physical therapists** have the highest flag rate at **10.6%**, 1.9 times Internal Medicine (5.5%).
-* **99 paid claims ($7,088)** fail at least one edit. They form the post-payment recovery worklist, ranked by dollars at risk.
+| Provider risk quartile | Share of flagged claims |
+|---|---:|
+| Q1 (highest risk, 30 providers) | **63.0%** |
+| Q2 | 19.3% |
+| Q3 | 10.8% |
+| Q4 (lowest risk) | 6.8% |
 
-**Recommendation:** Start TPE outreach with the high-risk group. Confirm high flag rates on low-volume providers with a claim sample first.
+* **Physical therapists** have the highest flag rate at **10.6%**, 1.9 times Internal Medicine (5.5%).
+* **99 paid claims ($7,088)** fail at least one edit. They form the recovery worklist, ranked by dollars at risk. Over-unit claims carry the highest amount per claim.
 
 ---
 
 ## Recommendations
 
-| Priority | Action | Expected impact |
+| # | Action | Impact |
 |---|---|---|
-| 1 | Move to rule-based routing: 6 hard edits auto-deny, 4 soft edits go to a reviewer | 96% of claims skip manual review; $305K (72%) lower decision cost |
-| 2 | Keep medical-record review for medical necessity and missing information claims | Covers the 296 denials edits cannot detect |
-| 3 | Work the recovery worklist, starting with over-unit claims | Up to $7,088 in paid claims at risk |
-| 4 | Focus provider education on the top 30 providers and physical therapy | Reaches 63% of flagged claims |
-| 5 | Add an enrollment date check at claim intake | Addresses the fastest-growing denial reason |
+| 1 | Route claims by rule: 6 hard edits auto-deny, 4 soft edits go to a reviewer, everything else passes | Manual reviews drop from 23,631 to 854; cost falls 72% |
+| 2 | Keep medical-record review for medical necessity and missing information | Covers the 296 denials no claim edit can detect |
+| 3 | Tighten the screening diagnosis code list before production use | Removes the weakest edit's 49 false flags |
+| 4 | Work the recovery worklist in dollar order, starting with over-unit claims | Up to $7,088 in paid claims to review |
+| 5 | Start TPE outreach with the top 30 providers and physical therapy | Reaches 63% of flagged claims |
+| 6 | Add a provider enrollment date check at claim intake | Targets the fastest-growing denial reason |
+
+> [!NOTE]
+> Dollar figures are a **scenario, not a measured payer outcome**. They use $18 per manual review, $0.35 per automated claim, and the amount paid plus $250 per missed improper claim. The Power BI report lets you change all three.
 
 ---
 
@@ -125,7 +146,7 @@ flowchart LR
     D -->|"Import + DAX"| E["Power BI report"]
 ```
 
-**Design rule:** Python fixes formats, SQL applies all business logic, Power BI only presents.
+**Design rule:** Python standardizes formats, SQL applies all business logic, and Power BI serves as the semantic layer and report.
 
 | Notebook | What it does |
 |---|---|
@@ -148,41 +169,79 @@ Four stakeholder pages plus drill-through and tooltip pages, built for self-serv
 
 Claims fact table with Date (marked date table), Procedures, Providers and Denial Reasons dimensions, plus Claim Edit Results, Failed Edits and Provider Risk. Measures are organized in display folders: Denials, Prepayment Edits, Cost Model, Assumptions, Providers and Recovery.
 
+<details>
+<summary><b>Methodology: edit definitions, decision rule and cost model</b></summary>
+
+<br>
+
+**Prepayment edits.** Each edit is based on a published Medicare billing rule and mapped to the payer denial reason (CARC) it mirrors. A claim is flagged when at least one edit fires.
+
+| Edit | Rule | Mirrors CARC |
+|---|---|---|
+| No Part B coverage | Service date outside the patient's Part B coverage | 24, 26, 27 |
+| Service after death | Service date after the patient's date of death | 27 |
+| Provider not enrolled | Service date outside the provider's Medicare enrollment | B7 |
+| Late filing | Claim received more than 1 year after service | 29 |
+| Units over daily limit | Units above the fee schedule's daily maximum (MUE style) | 151 |
+| Missing referring provider | Lab or therapy claim with no referring NPI | 16 |
+| Missing diagnosis | No ICD-10-CM code | 16 |
+| Wrong modifier | Therapy without GP, or GP/59 on a non-therapy code | 4 |
+| Screening dx on diagnostic | Screening diagnosis (Z00, Z13), or a diagnosis that does not support therapy | 50 |
+| Duplicate claim | Same patient, provider, code, date, units and modifier already billed | 18 |
+
+**Benchmark.** The payer's final decision from the 835 remittance. Multiple remittance rows are rolled up to one final status per claim, and denied or reversed claims count as refused.
+
+**Hard vs. soft edits.** Edits with 98% or higher accuracy (the payer also refused the claim) can auto-deny. Edits below 98% route to a reviewer. The threshold is a business assumption.
+
+**Cost model.** Full review = every decided claim × review cost. Rule-based routing = soft-edit reviews + automated processing + missed improper claims (amount paid + rework cost). A sensitivity table varies review cost and rework cost to find the break-even point.
+
+**Data cleaning highlights.** Six overlapping quarterly claim files deduplicated to the newest copy, 41 broken NPIs and broken patient IDs repaired from the remittance, one duplicate 835 batch removed, and every repair flagged for traceability.
+
+</details>
+
 ---
-
-## Repository Structure
-
-```
-├── 01_data_cleaning.ipynb          # Python: clean raw extracts, load stg
-├── 02_core_tables.ipynb            # SQL: build trusted core tables
-├── 03_payment_integrity.ipynb      # SQL: analysis and mart tables
-├── medicare_payment_integrity.pbix # Power BI report
-├── assets/                         # Report screenshots
-├── raw/                            # Source extracts (not committed)
-└── reference/                      # Fee schedule, reason codes (not committed)
-```
 
 ## Limitations
 
-* The data is synthetic, so results show the method, not real Medicare outcomes.
-* Scope is five procedure codes (99213, 99214, 80053, 93000, 97110), office setting, single-line claims.
-* The payer's decision is the benchmark, and payers also make mistakes, so measured edit accuracy is likely conservative.
-* Cost inputs are scenario assumptions, which is why the report includes what-if parameters and the notebook includes sensitivity analysis.
-* 349 claims still pending at the cut-off are excluded from denial rates, accuracy and the cost model.
+* **Synthetic data.** Results show the method, not real Medicare outcomes.
+* **Narrow scope.** Five procedure codes (99213, 99214, 80053, 93000, 97110), office setting, single-line claims.
+* **The payer is the benchmark**, and payers also make mistakes, so measured edit accuracy is likely conservative.
+* **Cost inputs are assumptions**, which is why the report has what-if inputs and the notebook has a sensitivity analysis.
+* **349 claims still pending** at the cut-off are excluded from denial rates, edit accuracy and the cost model.
 
-## Industry Context
+## Data Source
 
-This is not a hypothetical problem. In FY2025, Medicare Fee-for-Service made an estimated **$28.83 billion in improper payments (6.55%)**, and the Part B rate was 8.4%. About two thirds were tied to missing or insufficient documentation, the same pattern this analysis found in the claims the edits could not catch.
+All patients, providers and claims are **synthetic**. No real patient or provider information is used. File layouts follow real CMS formats (DE-SynPUF, NPPES, X12 835), and volumes, charges, allowed amounts and denial rates are calibrated to the CMS 2023 [Physician/Supplier Procedure Summary](https://data.cms.gov/summary-statistics-on-use-and-payments/physiciansupplier-procedure-summary). Code sets (HCPCS, ICD-10-CM, [CARC/RARC](https://x12.org/codes/claim-adjustment-reason-codes)) are real.
 
-## Sources
+The raw and reference extracts are not stored in this repository.
 
-* CMS, [Fiscal Year 2025 Improper Payments Fact Sheet](https://www.cms.gov/newsroom/fact-sheets/fiscal-year-2025-improper-payments-fact-sheet)
-* CMS, [2025 Medicare FFS Supplemental Improper Payment Data](https://www.cms.gov/files/document/nov-2025-medicare-ffs-supplemental-improper-payment-data-2025922.pdf)
-* CMS, [Medicare NCCI Medically Unlikely Edits](https://www.cms.gov/medicare/coding-billing/national-correct-coding-initiative-ncci-edits/medicare-ncci-medically-unlikely-edits-mues)
-* CMS, [Targeted Probe and Educate](https://www.cms.gov/Research-Statistics-Data-and-Systems/Monitoring-Programs/Medicare-FFS-Compliance-Programs/Medical-Review/Targeted-Probe-and-EducateTPE.html)
-* CMS, [Physician/Supplier Procedure Summary (PSPS)](https://data.cms.gov/summary-statistics-on-use-and-payments/physiciansupplier-procedure-summary)
-* X12, [Claim Adjustment Reason Codes](https://x12.org/codes/claim-adjustment-reason-codes)
+## Repository Structure
+
+| File / folder | Contents |
+|---|---|
+| [`01_data_cleaning.ipynb`](01_data_cleaning.ipynb) | Python cleaning and staging load |
+| [`02_core_tables.ipynb`](02_core_tables.ipynb) | SQL build of trusted core tables |
+| [`03_payment_integrity.ipynb`](03_payment_integrity.ipynb) | SQL analysis and mart tables |
+| [`medicare_payment_integrity.pbix`](medicare_payment_integrity.pbix) | Power BI report |
+| [`assets/`](assets/) | Report screenshots used in this README |
+
+<details>
+<summary><b>How to run</b></summary>
+
+<br>
+
+1. Install PostgreSQL and Python 3.10+, then `pip install pandas sqlalchemy psycopg2-binary jupysql jupyter`
+2. Place the source extracts in `raw/` and `reference/`
+3. Set the file paths and PostgreSQL password in the first cell of each notebook
+4. Run the notebooks in order: 01, 02, 03
+5. Open the `.pbix` in Power BI Desktop. To refresh, point the data source to your PostgreSQL database `medicare_claims_db`
+
+</details>
 
 ---
 
-**Thrinesh Vuribindi** · Data Analyst · Microsoft Certified: Fabric Analytics Engineer Associate (DP-600)
+## Author
+
+**Thrinesh Vuribindi**, Data Analyst
+
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/thrineshvuribindi)
