@@ -1,0 +1,10 @@
+# Source data (not committed)
+raw/
+reference/
+
+# Jupyter autosave copies
+.ipynb_checkpoints/
+
+# Windows system files
+Thumbs.db
+desktop.ini
